@@ -14,7 +14,7 @@ warnings = {}
 # Küfür ve porno kelimeleri (v1) + bazı varyasyonlar regex ile
 bad_words_patterns = [
     r"o+r+o+s+p+u", r"p+i+ç", r"m+a+l", r"a+q", r"s+a+l+a+k", r"s+l+a+k",
-    r"ö+k+ü+z", r"k+u+ş\s+b+e+y+i+n+l+i", r"am[iı]na", r"yarrak", r"penis", r"am",
+    r"ö+k+ü+z", r"k+u+ş\s+b+e+y+i+n+l+i", r"am[iı]na", r"yarrak", r"penis",
     r"porno", r"sex", r"sik", r"sikiş", r"bok", r"orosbucocugu",
     r"göt", r"sürtük", r"yarram", r"yarragim", r"amcık", r"taşak", r"daşak",
     r"vagina", r"cock", r"dick", r"pussy", r"anal", r"fisting", r"blowjob",

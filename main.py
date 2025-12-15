@@ -1,70 +1,106 @@
-import os
-import discord
+import os, re, discord, unicodedata
 from discord.ext import commands
-import re  # Regex için
+from datetime import timedelta
 
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 warnings = {}
 
-# Küfür ve porno kelimeleri (v1) + bazı varyasyonlar regex ile
-bad_words_patterns = [
-    r"o+r+o+s+p+u", r"p+i+ç", r"m+a+l", r"a+q", r"s+a+l+a+k", r"s+l+a+k",
-    r"ö+k+ü+z", r"k+u+ş\s+b+e+y+i+n+l+i", r"am[iı]na", r"yarrak", r"penis",
-    r"porno", r"sex", r"sik", r"sikiş", r"bok", r"orosbucocugu",
-    r"göt", r"sürtük", r"yarram", r"yarragim", r"amcık", r"taşak", r"daşak",
-    r"vagina", r"cock", r"dick", r"pussy", r"anal", r"fisting", r"blowjob",
-    r"cum", r"masturbation", r"tits", r"boobs", r"ass", r"whore", r"slut", r"bitch",
-    # Taktiksel varyasyonlar
-    r"a\s*m\s*i\s*n\s*a", r"s\s*a\s*l\s*a\s*k"
+# =========================
+# 🧠 AKILLI NORMALIZE
+# =========================
+def normalize(t: str) -> str:
+    t = t.lower()
+
+    # leet + özel karakterler
+    t = (t.replace("@","a").replace("1","i").replace("!","i")
+           .replace("0","o").replace("$","s").replace("€","e")
+           .replace("3","e").replace("4","a").replace("5","s")
+           .replace("7","t"))
+
+    # Türkçe -> latin
+    tr = str.maketrans("ıİşŞğĞçÇöÖüÜ","iissggccoouu")
+    t = t.translate(tr)
+
+    # unicode sadeleştir
+    t = unicodedata.normalize("NFKD", t)
+
+    # harf/rakam dışı SİL (boşluk, nokta, emoji, vs)
+    t = re.sub(r"[^a-z0-9]", "", t)
+
+    # uzatma kır (oooo → o)
+    t = re.sub(r"(.)\1+", r"\1", t)
+
+    return t
+
+# =========================
+# 🚫 ÇEKİRDEK KÜFÜRLER
+# normalize hepsini yakalar
+# =========================
+BAD_WORDS = [
+    # Türkçe ağır
+    "orospu","orospucocugu","am","amina","amcik","yarrak","yarram",
+    "sik","sikis","got","tasak","dasak","ibne","pic","salak","mal",
+    "gerizekali","aptal","kahpe","serefsiz",
+
+    # Kısaltmalar / argo
+    "aq","mk","sg","oc",
+
+    # İngilizce / porno
+    "fuck","shit","bitch","whore","slut","ass","dick","cock","pussy",
+    "penis","vagina","sex","porno","anal","blowjob","cum","boobs","tits"
 ]
 
+PATTERNS = [re.compile(w) for w in BAD_WORDS]
+
+# =========================
 @bot.event
 async def on_ready():
-    print(f"Bot aktif: {bot.user}")
+    print(f"🔥 TITAN FILTER AKTIF: {bot.user}")
 
+# =========================
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    msg = message.content.lower()
+    cleaned = normalize(message.content)
 
-    # Küfür veya porno içeriyor mu regex ile kontrol
-    if any(re.search(pattern, msg) for pattern in bad_words_patterns):
+    if any(p.search(cleaned) for p in PATTERNS):
         try:
             await message.delete()
         except:
             pass
 
-        user = message.author
+        uid = message.author.id
+        warnings[uid] = warnings.get(uid, 0) + 1
+        w = warnings[uid]
 
-        if user.id not in warnings:
-            warnings[user.id] = 1
+        if w < 3:
+            await message.channel.send(
+                f"{message.author.mention} ⚠️ **{w}. uyarı!**"
+            )
         else:
-            warnings[user.id] += 1
-
-        warn_count = warnings[user.id]
-
-        if warn_count < 3:
-            await message.channel.send(f"{user.mention} **{warn_count}. Uyarıyı aldı!**")
-        else:
-            await message.channel.send(f"{user.mention} **3. uyarıyı aldı ve susturuldu!**")
+            await message.channel.send(
+                f"{message.author.mention} 🔇 **3. uyarı → 1 gün timeout!**"
+            )
             try:
-                await user.timeout(discord.utils.utcnow() + discord.timedelta(days=1), reason="Küfür/Porno")
+                await message.author.timeout(
+                    discord.utils.utcnow() + timedelta(days=1),
+                    reason="Küfür / Porno"
+                )
             except:
-                await message.channel.send("❌ Bu kullanıcıyı susturmak için yetkim yok!")
+                await message.channel.send("❌ Yetkim yok!")
 
     await bot.process_commands(message)
 
+# =========================
 @bot.command()
 async def uyarı_sıfırla(ctx, member: discord.Member):
     warnings[member.id] = 0
-    await ctx.send(f"{member.mention} kullanıcısının uyarıları sıfırlandı.")
+    await ctx.send(f"✅ {member.mention} uyarıları sıfırlandı.")
 
-TOKEN = os.getenv("TOKEN")
-bot.run(TOKEN)
+bot.run(os.getenv("TOKEN"))

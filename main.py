@@ -8,53 +8,40 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 warnings = {}
+DEV_ROLE_NAME = "Developer"  # 👈 ROL ADI (birebir aynı olmalı)
 
 # =========================
 # 🧠 AKILLI NORMALIZE
 # =========================
 def normalize(t: str) -> str:
     t = t.lower()
-
-    # leet + özel karakterler
     t = (t.replace("@","a").replace("1","i").replace("!","i")
            .replace("0","o").replace("$","s").replace("€","e")
            .replace("3","e").replace("4","a").replace("5","s")
            .replace("7","t"))
-
-    # Türkçe -> latin
-    tr = str.maketrans("ıİşŞğĞçÇöÖüÜ","iissggccoouu")
-    t = t.translate(tr)
-
-    # unicode sadeleştir
+    t = t.translate(str.maketrans("ıİşŞğĞçÇöÖüÜ","iissggccoouu"))
     t = unicodedata.normalize("NFKD", t)
-
-    # harf/rakam dışı SİL (boşluk, nokta, emoji, vs)
     t = re.sub(r"[^a-z0-9]", "", t)
-
-    # uzatma kır (oooo → o)
     t = re.sub(r"(.)\1+", r"\1", t)
-
     return t
 
 # =========================
 # 🚫 ÇEKİRDEK KÜFÜRLER
-# normalize hepsini yakalar
 # =========================
 BAD_WORDS = [
-    # Türkçe ağır
     "orospu","orospucocugu","am","amina","amcik","yarrak","yarram",
     "sik","sikis","got","tasak","dasak","ibne","pic","salak","mal",
     "gerizekali","aptal","kahpe","serefsiz",
-
-    # Kısaltmalar / argo
     "aq","mk","sg","oc",
-
-    # İngilizce / porno
     "fuck","shit","bitch","whore","slut","ass","dick","cock","pussy",
     "penis","vagina","sex","porno","anal","blowjob","cum","boobs","tits"
 ]
 
 PATTERNS = [re.compile(w) for w in BAD_WORDS]
+
+# =========================
+def is_developer(member: discord.Member) -> bool:
+    return any(r.name == DEV_ROLE_NAME for r in member.roles)
 
 # =========================
 @bot.event
@@ -65,6 +52,11 @@ async def on_ready():
 @bot.event
 async def on_message(message):
     if message.author.bot:
+        return
+
+    # 👑 DEVELOPER MUAF
+    if isinstance(message.author, discord.Member) and is_developer(message.author):
+        await bot.process_commands(message)
         return
 
     cleaned = normalize(message.content)
@@ -80,13 +72,9 @@ async def on_message(message):
         w = warnings[uid]
 
         if w < 3:
-            await message.channel.send(
-                f"{message.author.mention} ⚠️ **{w}. uyarı!**"
-            )
+            await message.channel.send(f"{message.author.mention} ⚠️ **{w}. uyarı!**")
         else:
-            await message.channel.send(
-                f"{message.author.mention} 🔇 **3. uyarı → 1 gün timeout!**"
-            )
+            await message.channel.send(f"{message.author.mention} 🔇 **3. uyarı → 1 gün timeout!**")
             try:
                 await message.author.timeout(
                     discord.utils.utcnow() + timedelta(days=1),
